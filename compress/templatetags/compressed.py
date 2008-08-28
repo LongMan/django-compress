@@ -5,7 +5,8 @@ from django import template
 from django.conf import settings as django_settings
 
 from compress.conf import settings
-from compress.utils import media_root, media_url, needs_update, filter_css, filter_js, get_output_filename, get_version
+from compress.utils import media_root, media_url, needs_update, filter_css, filter_js, get_output_filename, get_version, \
+                           get_source_filenames
 
 register = template.Library()
 
@@ -33,6 +34,7 @@ class CompressedCSSNode(template.Node):
 
         try:
             css = settings.COMPRESS_CSS[css_name]
+            css['source_filenames'] = get_source_filenames(css['source_filenames'])
         except KeyError:
             return '' # fail silently, do not return anything if an invalid group is specified
 
@@ -63,6 +65,7 @@ class CompressedJSNode(template.Node):
 
         try:
             js = settings.COMPRESS_JS[js_name]
+            js['source_filenames'] = get_source_filenames(js['source_filenames'])
         except KeyError:
             return '' # fail silently, do not return anything if an invalid group is specified
 

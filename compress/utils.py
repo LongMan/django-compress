@@ -42,7 +42,7 @@ def needs_update(output_file, source_files):
     """
     Scan the source files for changes and returns True if the output_file needs to be updated.
     """
-
+    source_files = get_source_filenames(source_files)
     mtime = max_mtime(source_files)
     version = get_version(mtime)
 
@@ -67,6 +67,7 @@ def concat(filenames, separator=''):
     """
     Concatenate the files from the list of the ``filenames``, ouput separated with ``separator``.
     """
+    print "concatenating", filenames
     r = ''
 
     for filename in filenames:
@@ -97,7 +98,7 @@ def get_version(version):
     except ValueError:
         return str(version)
 
-def remove_files(path, filename, verbosity=0):    
+def remove_files(path, filename, verbosity=0):
     regex = re.compile(r'^%s$' % (os.path.basename(get_output_filename(settings.COMPRESS_VERSION_PLACEHOLDER.join([re.escape(part) for part in filename.split(settings.COMPRESS_VERSION_PLACEHOLDER)]), r'\d+'))))
 
     for f in os.listdir(path):
@@ -108,7 +109,8 @@ def remove_files(path, filename, verbosity=0):
             os.unlink(os.path.join(path, f))
 
 def filter_common(obj, verbosity, filters, attr, separator, signal):
-    output = concat(obj['source_filenames'], separator)
+    source_filenames = get_source_filenames(obj['source_filenames'])
+    output = concat(source_filenames, separator)
     filename = get_output_filename(obj['output_filename'], get_version(max_mtime(obj['source_filenames'])))
 
     if settings.COMPRESS_VERSION:
@@ -128,3 +130,46 @@ def filter_css(css, verbosity=0):
 
 def filter_js(js, verbosity=0):
     return filter_common(js, verbosity, filters=settings.COMPRESS_JS_FILTERS, attr='filter_js', separator=';', signal=js_filtered)
+
+def flatten(seq):
+    """
+    >>> flatten([1,2,3,[4, [5]],6])
+    [1, 2, 3, 4, 5, 6]
+
+    """
+    res = []
+    for item in seq:
+        if (isinstance(item, (tuple, list))):
+            res.extend(flatten(item))
+        else:
+            res.append(item)
+    return res
+
+
+def get_source_filenames(source_filenames):
+    """
+    Replace regular expressions with filenames in source_filenames
+    """
+    source_filenames = list(source_filenames) # In settings we have tuple for source_filenames
+    for sf_index, source_filename in enumerate(source_filenames):
+        if not source_filename.startswith("(re)"): continue
+
+        pattern = source_filename[4:]
+        acceptable_filenames = []
+        expression = re.compile(pattern)
+        head = pattern
+
+        while True:
+            if os.path.exists(os.path.join(django_settings.MEDIA_ROOT, head)) or \
+               head == '':
+                break
+            head, tail = os.path.split(head)
+
+        for i in os.walk(os.path.join(django_settings.MEDIA_ROOT, head)):
+            for filename in i[2]:
+                source_filename = os.path.join(i[0], filename)[len(django_settings.MEDIA_ROOT)+1:]
+                if expression.match(source_filename):
+                    acceptable_filenames.append(source_filename)
+        source_filenames[sf_index] = acceptable_filenames
+
+    return flatten(source_filenames)
